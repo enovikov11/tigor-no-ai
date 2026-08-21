@@ -308,6 +308,7 @@
                   generateHostKeys = vm;
                   openFirewall = true;
                   extraConfig = lib.mkIf (vm && vsock) ''
+                    ListenAddress 0.0.0.0:22
                     ListenAddress vsock:*:22
                   '';
                   settings = {
