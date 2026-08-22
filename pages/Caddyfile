@@ -1,0 +1,12 @@
+pages.tgr.rs:443 {
+    root * /srv/repo
+    encode gzip
+
+    @git    path /.git*
+    respond @git 404
+
+    @webhook path /pull
+    reverse_proxy @webhook webhook:8000
+
+    file_server
+}

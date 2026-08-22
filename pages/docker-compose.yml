@@ -1,0 +1,21 @@
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - /root/pages-data/repo:/srv/repo:ro
+      - /root/pages-data/caddy-data:/data
+      - /root/pages-data/caddy-config:/config
+    restart: unless-stopped
+
+  webhook:
+    build: .
+    volumes:
+      - /root/pages-data/repo:/srv/repo
+    environment:
+      - REPO_URL=https://github.com/enovikov11/tigor-ai.git
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+    restart: unless-stopped
