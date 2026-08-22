@@ -197,12 +197,148 @@
         '';
       };
 
+      cloudInitModule =
+        {
+          composePath,
+          authorizedSshKeys,
+          password,
+          ...
+        }:
+        {
+          config,
+          lib,
+          pkgs,
+          modulesPath,
+          ...
+        }:
+        {
+          imports = [
+            (modulesPath + "/profiles/minimal.nix")
+            (modulesPath + "/installer/netboot/netboot.nix")
+          ];
+
+          # Cloud-init: SSH host keys, network (DHCP), users, timezone
+          services.cloud-init = {
+            enable = true;
+            sshInsertKeys = true;
+          };
+
+          time.timeZone = "Europe/Belgrade";
+          i18n.defaultLocale = "en_US.UTF-8";
+
+          networking = {
+            hostName = "cloud-r37";
+            firewall.enable = true;
+            nftables.enable = true;
+            networkmanager.enable = true;
+            useDHCP = true;
+          };
+
+          services.openssh = {
+            enable = true;
+            generateHostKeys = true;
+            openFirewall = true;
+            settings = {
+              AuthenticationMethods = "publickey";
+              PasswordAuthentication = false;
+              KbdInteractiveAuthentication = false;
+              PermitEmptyPasswords = false;
+              X11Forwarding = false;
+              PermitRootLogin = "prohibit-password";
+              AllowUsers = [ "root" "nixos" ];
+            };
+          };
+
+          users.mutableUsers = false;
+          users.users = {
+            root = {
+              hashedPassword = "!";
+              openssh.authorizedKeys.keys = authorizedSshKeys;
+            };
+            nixos = {
+              isNormalUser = true;
+              linger = true;
+              hashedPassword = password;
+              extraGroups = [ "video" "render" "libvirtd" "kvm" ];
+              openssh.authorizedKeys.keys = authorizedSshKeys;
+            };
+          };
+
+          nix.settings = {
+            experimental-features = [ "nix-command" "flakes" ];
+            max-jobs = 4;
+            cores = 32;
+          };
+
+          nixpkgs.config.allowUnfreePredicate = pkg: lib.hasPrefix "nvidia-" (lib.getName pkg);
+
+          # Podman + NVIDIA + compose service
+          virtualisation.podman = {
+            enable = true;
+            dockerCompat = true;
+            extraRuntimes = [ pkgs.gvisor ];
+          };
+          hardware.nvidia-container-toolkit.enable = true;
+
+          # Copy docker-compose.yml into place
+          systemd.services.cloud-podman-compose = {
+            description = "Start podman compose services";
+            wantedBy = [ "multi-user.target" ];
+            after = [ "network-online.target" "podman.service" ];
+            wants = [ "network-online.target" "podman.service" ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              User = "nixos";
+              Group = "nixos";
+            };
+            script = ''
+              mkdir -p /etc/tigor/hermes-vm
+              cp ${composePath} /etc/tigor/hermes-vm/docker-compose.yml
+              cd /etc/tigor/hermes-vm
+              ${pkgs.podman-compose}/bin/podman-compose up -d --remove-orphans
+            '';
+          };
+
+          environment.systemPackages = with pkgs; [
+            bubblewrap
+            curl
+            git
+            htop
+            jq
+            podman
+            podman-compose
+            python3
+            reptyr
+            tmux
+            vim
+            wireguard-tools
+            gvisor
+          ];
+
+          environment.shellAliases = {
+            pod = "podman compose up -d --remove-orphans";
+          };
+
+          systemd.tmpfiles.rules = [ "d /etc/tigor 0775 root nixos -" ];
+
+          boot = {
+            kernelParams = [
+              "nohibernate"
+              "transparent_hugepage=madvise"
+            ];
+          };
+
+          system.stateVersion = "26.05";
+        };
+
       stateless =
         {
           vm ? false,
           nvidia ? false,
           containers ? false,
           gnome ? false,
+          cloudInit ? false,
           scalingFactor ? 1,
           firefox ? false,
           vscodium ? false,
@@ -212,8 +348,8 @@
           vsock ? false,
         }:
         let
-          hostNvidia = (!vm) && nvidia;
-          rtxPassthrough = (!vm) && (!nvidia);
+          hostNvidia = (!vm) && (!cloudInit) && nvidia;
+          rtxPassthrough = (!vm) && (!cloudInit) && (!nvidia);
           vfioPciIds =
             # Bind the unused GPU's complete IOMMU group before display drivers probe.
             lib.optionals hostNvidia [
@@ -631,11 +767,17 @@
           vsock = true;
           password = "";
         };
+        cloud = cloudInitModule {
+          composePath = ./hermes-vm/docker-compose.yml;
+          authorizedSshKeys = [ yubiSshKey ];
+          password = mainPassword;
+        };
       };
 
       packages.${system} = {
         host = self.nixosConfigurations.host.config.system.build.uki;
         vm = self.nixosConfigurations.vm.config.system.build.uki;
+        cloud = self.nixosConfigurations.cloud.config.system.build.netbootRamdisk;
       };
     };
 }
