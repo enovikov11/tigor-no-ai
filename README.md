@@ -85,9 +85,9 @@ wait_models_and_restart Gpu burn & telegraf
 wait_models_and_restart vm.sh: compare with qemu libvirt command
 
 in_review Networking: nonet for vllm/forgejo, caddy for pages.ai.tgr.rs/vllm.vpn.tgr.rs
-https://github.com/enovikov11/tigor-no-ai/pull/27/changes
-https://github.com/enovikov11/tigor-ai/compare/main...feat/vpn-networks-v2
-wait_net Hermes memory setup (honcho.dev), qdrant, graphify
+vpn-vnext.sh
+https://github.com/enovikov11/tigor-ai/pull/33
+wait_net Hermes memory setup (honcho.dev, lacks docker ?), qdrant, graphify
 wait_net Gateway: matrix, element.io X/Web, Synapse, mattermost
 
 vm.sh: non-root + premade sockets by root
@@ -168,6 +168,15 @@ Denominations simulator - cash economy math model game
 Jetkvm
 Move to Xen from KVM
 Buy CMP 170HX cluster
+
+## .env example
+
+TERMINAL_MODAL_IMAGE=nikolaik/python-nodejs:python3.11-nodejs20
+OPENROUTER_API_KEY=
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USERS=
+TELEGRAM_HOME_CHANNEL=
+GITHUB_TOKEN=
 
 ## Learnings
 
