@@ -80,19 +80,21 @@ hf download ${e} --local-dir /data/${e}
 
 ## TODO
 
-wait_net Hermes memory setup (honcho.dev), qdrant, graphify
-
 in_progress Download models
-wait_restart Gpu burn & telegraf
+wait_models_and_restart Gpu burn & telegraf
+wait_models_and_restart vm.sh: compare with qemu libvirt command
 
 in_review Networking: nonet for vllm/forgejo, caddy for pages.ai.tgr.rs/vllm.vpn.tgr.rs
+https://github.com/enovikov11/tigor-no-ai/pull/27/changes
+https://github.com/enovikov11/tigor-ai/compare/main...feat/vpn-networks-v2
+wait_net Hermes memory setup (honcho.dev), qdrant, graphify
 wait_net Gateway: matrix, element.io X/Web, Synapse, mattermost
 
 vm.sh: non-root + premade sockets by root
 vm.sh: make all args
 vm.sh: test bubblewrap (need nested)
 
-vm.sh: compare with qemu libvirt command
+LLM config/benchmark on context, model and hardware
 
 Data diode
 
