@@ -37,7 +37,12 @@ sync && reboot now
 ## Code
 
 find . -type f -exec sha256sum {} +
-find . -type f -printf '%P\t%s\n'
+find . -type d -name .cache -prune -exec rm -rf {} +
+
+cd /hdd/public/internet
+cd /ssd/public/internet
+find ./huggingface* -mindepth 2 -maxdepth 2 -type d -exec du -sh {} +
+> /ssd/public/vm/hermes/data/hdd-sizes.txt
 
 ssh box
 ssh -J box root@127.0.0.1 -p 2222
@@ -72,23 +77,20 @@ xsltproc --nonet vm.xsl vm.xsl
 
 chmod 777 /run/user/1000/podman/podman.sock
 
-podman run -it --rm --name hf-downloader -v /hdd/public/internet/huggingface-temp:/data \
-  docker.io/library/python:3.12-slim bash
+podman run -it --rm --name hf-downloader -v /ssd/public/internet/huggingface.co-temp:/data docker.io/library/python:3.12-slim bash
 pip install -q huggingface_hub
 hf auth login
-hf download ${e} --local-dir /data/${e}
+model="primitive-ai/Qwen3.8-Flash-Next-NVFP4"
+hf download $model --local-dir "/data/$model"
 
 ## TODO
 
-in_progress Download models
-wait_models_and_restart Gpu burn & telegraf
-wait_models_and_restart vm.sh: compare with qemu libvirt command
+Gateway: matrix, element.io X/Web, Synapse, mattermost
+Memory: https://github.com/plastic-labs/honcho honcho.dev, qdrant, graphify
 
-in_review Networking: nonet for vllm/forgejo, caddy for pages.ai.tgr.rs/vllm.vpn.tgr.rs
-vpn-vnext.sh
-https://github.com/enovikov11/tigor-ai/pull/33
-wait_net Hermes memory setup (honcho.dev, lacks docker ?), qdrant, graphify
-wait_net Gateway: matrix, element.io X/Web, Synapse, mattermost
+need_restart Gpu burn & telegraf
+need_restart vm.sh: compare with qemu libvirt command
+need_review Networking: vpn-vnext.sh, https://github.com/enovikov11/tigor-ai/pull/33
 
 vm.sh: non-root + premade sockets by root
 vm.sh: make all args
@@ -97,6 +99,10 @@ vm.sh: test bubblewrap (need nested)
 LLM config/benchmark on context, model and hardware
 
 Data diode
+
+Minimax H3
+Snapshots for img
+Load pods on demand
 
 Autonomous semi-isolated task api: 1 message/call = agent spawn
 Secrets scanning
