@@ -50,23 +50,23 @@ ssh -J box root@127.0.0.1 -p 2222
 ssh-keygen -R vm
 ssh -o 'ProxyCommand=ssh box socat - VSOCK-CONNECT:3:22' root@vm
 
-qemu-img create -f qcow2 /ssd/vm/hermes.qcow2 500G
+qemu-img create -f qcow2 /ssd/public/vm/hermes/hermes.qcow2 500G
 mkfs.ext4 -L data /dev/vda
-chown -R nixos:users /home/nixos
+chown -R public:public /ssd/public
 
 nixos-rebuild switch --flake .#vm --override flake.nix '{ modules = [{ networking.firewall.enable = true; }]; }'
 
-sshfs nixos@10.67.69.2:/home/nixos /home/nixos -o Port=2222,reconnect
+sshfs public@10.67.69.2:/ssd/public /ssd/public -o Port=2222,reconnect
 echo o > /proc/sysrq-trigger
 nft flush ruleset
 
 codeberg.org/forgejo/forgejo:16
 podman pull docker.io/vllm/vllm-openai:nightly
-podman save docker.io/vllm/vllm-openai:nightly | gzip > /home/nixos/vllm.tar.gz
+podman save docker.io/vllm/vllm-openai:nightly | gzip > /ssd/public/vllm.tar.gz
 gunzip -c vllm.tar.gz | podman load
 
-cd /ssd/internet
-chown -R nixos:users .
+cd /ssd/public/internet
+chown -R public:public .
 find . -type d -exec chmod 2775 {} +
 find . -type f -exec chmod 664 {} +
 
@@ -75,7 +75,7 @@ ls /run/netns
 virsh undefine hermes --nvram
 xsltproc --nonet vm.xsl vm.xsl
 
-chmod 777 /run/user/1000/podman/podman.sock
+chmod 777 /run/user/2000/podman/podman.sock
 
 podman run -it --rm --name hf-downloader -v /ssd/public/internet/huggingface.co-temp:/data docker.io/library/python:3.12-slim bash
 pip install -q huggingface_hub

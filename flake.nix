@@ -210,10 +210,18 @@
           password ? "!",
           authorizedSshKeys ? [ yubiSshKey ],
           vsock ? false,
+          mainUser ? "public",
         }:
         let
           hostNvidia = (!vm) && nvidia;
           rtxPassthrough = (!vm) && (!nvidia);
+          userUids = {
+            public = 2000;
+            private = 2001;
+            secret = 2002;
+          };
+          telegrafUser = if vm then mainUser else "private";
+          telegrafDir = if vm then "/ssd/${mainUser}/telegraf" else "/hdd/private/telegraf";
           vfioPciIds =
             # Bind the unused GPU's complete IOMMU group before display drivers probe.
             lib.optionals hostNvidia [
@@ -235,7 +243,8 @@
             + lib.optionalString firefox "-ff"
             + lib.optionalString vscodium "-vs"
             + lib.optionalString sudo "-su"
-            + lib.optionalString vsock "-vsock";
+            + lib.optionalString vsock "-vsock"
+            + lib.optionalString vm ("-" + mainUser);
           ukiName = "${imageName}-BOOTX64";
         in
         lib.nixosSystem {
@@ -288,7 +297,7 @@
                   networkmanager.enable = true;
                 };
 
-                fileSystems."/home/nixos" = lib.mkIf vm {
+                fileSystems."/ssd/${mainUser}" = lib.mkIf vm {
                   device = "/dev/vda";
                   fsType = "ext4";
                   options = [
@@ -312,7 +321,9 @@
                     PermitRootLogin = "prohibit-password";
                     AllowUsers = [
                       "root"
-                      "nixos"
+                      "public"
+                      "private"
+                      "secret"
                     ];
                   };
                 };
@@ -323,30 +334,84 @@
                 // lib.optionalAttrs sudo { wheelNeedsPassword = false; };
 
                 users.mutableUsers = false;
-                users.users = {
-                  root = {
-                    hashedPassword = "!";
-                    openssh.authorizedKeys.keys = [ yubiSshKey ];
+                users.users =
+                  {
+                    root = {
+                      hashedPassword = "!";
+                      openssh.authorizedKeys.keys = [ yubiSshKey ];
+                    };
+                    public = {
+                      uid = 2000;
+                      group = "public";
+                    };
+                    private = {
+                      uid = 2001;
+                      group = "private";
+                    };
+                    secret = {
+                      uid = 2002;
+                      group = "secret";
+                    };
+                  }
+                  // lib.optionalAttrs (!vm) {
+                    public = {
+                      uid = 2000;
+                      group = "public";
+                      isNormalUser = true;
+                      home = "/ssd/public";
+                    };
+                    private = {
+                      uid = 2001;
+                      group = "private";
+                      isNormalUser = true;
+                      home = "/ssd/private";
+                    };
+                    secret = {
+                      uid = 2002;
+                      group = "secret";
+                      isNormalUser = true;
+                      home = "/ssd/secret";
+                    };
+                  }
+                  // lib.optionalAttrs vm {
+                    "${mainUser}" = {
+                      uid = userUids."${mainUser}";
+                      group = mainUser;
+                      isNormalUser = true;
+                      home = "/ssd/${mainUser}";
+                      linger = true;
+                      hashedPassword = password;
+                      extraGroups =
+                        lib.optionals sudo [ "wheel" ]
+                        ++ lib.optionals (gnome || nvidia) [
+                          "video"
+                          "render"
+                        ];
+                      openssh.authorizedKeys.keys = authorizedSshKeys;
+                    };
                   };
-
-                  nixos = {
-                    isNormalUser = true;
-                    linger = true;
-                    hashedPassword = password;
-                    extraGroups =
-                      lib.optionals sudo [ "wheel" ]
-                      ++ lib.optionals (!vm) [
-                        "kvm"
-                        "libvirtd"
-                      ]
-                      ++ lib.optionals (gnome || nvidia) [
-                        "video"
-                        "render"
-                      ];
-                    openssh.authorizedKeys.keys = authorizedSshKeys;
+                users.groups = {
+                  public = {
+                    gid = 2000;
+                    members = [
+                      "public"
+                      "private"
+                      "secret"
+                    ];
                   };
+                  private = {
+                    gid = 2001;
+                    members = [
+                      "private"
+                      "secret"
+                    ];
+                  };
+                  secret = {
+                    gid = 2002;
+                    members = [ "secret" ];
+                  };
+                  kvm.members = lib.optionals (!vm) [ "qemu-libvirtd" ];
                 };
-                users.groups.kvm.members = lib.optionals (!vm) [ "qemu-libvirtd" ];
 
                 boot = {
                   supportedFilesystems = lib.optionals (!vm) [ "zfs" ];
@@ -434,7 +499,7 @@
                 };
                 services.displayManager.autoLogin = lib.mkIf (vm && gnome) {
                   enable = true;
-                  user = "nixos";
+                  user = mainUser;
                 };
 
                 programs.firefox.enable = firefox;
@@ -481,7 +546,11 @@
 
                 systemd.tmpfiles.rules =
                   [ "w /sys/kernel/mm/transparent_hugepage/defrag - - - - defer" ]
-                  ++ lib.optionals (!vm) [ "d /etc/tigor 0775 root libvirtd -" ];
+                  ++ lib.optionals (!vm) [
+                    "d /etc/tigor 0775 root libvirtd -"
+                    "d /hdd/private/telegraf 0750 private private -"
+                  ]
+                  ++ lib.optionals vm [ "d /ssd/${mainUser}/telegraf 0750 ${mainUser} ${mainUser} -" ];
                 systemd.targets.sleep.enable = false;
                 systemd.targets.suspend.enable = false;
                 systemd.targets.hibernate.enable = false;
@@ -507,7 +576,7 @@
                       [[inputs.kernel]]
                       [[inputs.nvidia_smi]]
                       [[outputs.file]]
-                        files = ["/ssd/nixos/telegraf/metrics.log"]
+                        files = ["${telegrafDir}/metrics.log"]
                         rotation_max_archives = 3
                         data_format = "influx"
                     '';
@@ -596,8 +665,8 @@
                   after = [ "network.target" ];
                   serviceConfig = {
                     Type = "simple";
-                    User = "nixos";
-                    Group = "users";
+                    User = telegrafUser;
+                    Group = telegrafUser;
                   };
                   script = ''
                     exec ${pkgs.telegraf}/bin/telegraf --non-strict-env-handling \
