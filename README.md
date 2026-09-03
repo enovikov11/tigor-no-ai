@@ -103,6 +103,7 @@ Data diode
 Minimax H3
 Snapshots for img
 Load pods on demand
+N8n
 
 Autonomous semi-isolated task api: 1 message/call = agent spawn
 Secrets scanning
