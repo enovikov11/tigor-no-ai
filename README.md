@@ -22,17 +22,15 @@ See also https://github.com/enovikov11/tigor-ai
 /ssd/public/rw-img/hermes.qcow2 -> dev:rw -> /home/nixos/data
 /ssd/public/cache-img/hermes.qcow2 -> dev:cache -> /home/nixos
 
-public:public
-private:private
-secret:secret
+gid public 2000 = uid public 2000
+gid private 2001 = uid private 2001
+gid secret 2002 = uid secret 2002
 
-uid public 2000
-uid private 2001
-uid secret 2002
+/{ssd,hdd}/public public:public rwx-rwx-0
+/{ssd,hdd}/public/ro public:public rwx-rwx-r
 
-gid public 2000 = uid public + uid private + uid secret
-gid private 2001 = uid private
-gid secret 2002 = uid secret
+/{ssd,hdd}/private private:private rwx-rwx-0
+/{ssd,hdd}/secret secret:secret rwx-rwx-0
 
 mkdir -p /hdd /ssd
 
