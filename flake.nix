@@ -389,7 +389,7 @@
                   public.gid = 2000;
                   private.gid = 2001;
                   secret.gid = 2002;
-                }
+                };
 
                 boot = {
                   supportedFilesystems = lib.optionals (!vm) [ "zfs" ];
