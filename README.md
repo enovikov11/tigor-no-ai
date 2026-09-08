@@ -15,8 +15,8 @@ See also https://github.com/enovikov11/tigor-ai
 ## VM arch
 
 mkdir -p /ssd/{public,private,secret}/{ro,cache-img,uki}
-mkdir -p /hdd/{public,private,secret}/{ro,rw-img}
-mkdir -p /hdd/public/host-telegraf /hdd/root/keys
+mkdir -p /hdd/{public,private,secret}/{ro,rw-img,host}
+mkdir -p /hdd/public/host/telegraf /hdd/root/keys
 
 /ssd/public/ro -> vitiofs:ssd-ro -> /ssd/public/ro
 /ssd/public/rw-img/hermes.qcow2 -> dev:rw -> /home/nixos/data
