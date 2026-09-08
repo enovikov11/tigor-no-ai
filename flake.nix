@@ -302,6 +302,9 @@
                 services.openssh = {
                   enable = true;
                   generateHostKeys = vm;
+                  hostKeys = lib.optionals vm [
+                    { path = "/home/nixos/.ssh/ssh_host_ed25519_key"; type = "ed25519"; }
+                  ];
                   openFirewall = true;
                   settings = {
                     AuthenticationMethods = "publickey";
