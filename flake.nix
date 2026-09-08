@@ -338,6 +338,7 @@
                       ++ lib.optionals (!vm) [
                         "kvm"
                         "libvirtd"
+                        "tss"
                       ]
                       ++ lib.optionals (gnome || nvidia) [
                         "video"
@@ -399,6 +400,17 @@
                 # Allow non-root users to bind to ports <= 1024 (VM services)
                 boot.kernel.sysctl = lib.mkIf vm {
                   "net.ipv4.ip_unprivileged_port_start" = 0;
+                };
+
+                security.tpm2 = lib.mkIf (!vm) {
+                  enable = true;
+                  abrmd.enable = true;
+                  pkcs11.enable = true;
+
+                  tctiEnvironment = {
+                    enable = true;
+                    interface = "tabrmd";
+                  };
                 };
 
                 services.udev.extraRules = lib.optionalString (!vm) ''
@@ -572,6 +584,13 @@
                   ++ lib.optionals (!vm) (
                     with pkgs;
                     [
+                      age
+                      age-plugin-tpm
+                      ssh-tpm-agent
+                      tpm2-tools
+                      tpm2-openssl
+                      opensc
+                      pkcs11-provider
                       qemu_kvm
                       libvirt
                       openssl
