@@ -60,7 +60,7 @@ diff flake.nix flake.nix.bak
 diff vm.sh vm.sh.bak
 diff vm.xsl vm.xsl.bak
 
-nix build .#vm
+nix build .#vm-pub
 cp ./result/vm-*-BOOTX64.efi /ssd/public/uki/
 echo -e '\a'
 
