@@ -10,7 +10,7 @@
     { self, nixpkgs, ... }:
     let
       # Number of a commit in a repo, r123 = 123th commit in tigor-no-ai
-      revision = "r100";
+      revision = "r105";
 
       # Public password hash is a tradeoff between usability and security, underlying is high entropy
       yubiSshKey = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIMltMQTMSIcxPbZLNCxkAT/MWRqJo1IFOfH95OoscQbCAAAABHNzaDo= enovikov11@novikov.local";
@@ -200,18 +200,23 @@
       stateless =
         {
           vm ? false,
+          vmType ? "public",
           nvidia ? false,
           containers ? false,
           gnome ? false,
           scalingFactor ? 1,
           firefox ? false,
           vscodium ? false,
-          sudo ? false,
           password ? "!",
           authorizedSshKeys ? [ yubiSshKey ],
           vsock ? false,
         }:
         let
+          vmIdentity = {
+            public = { uid = 2000; gid = 2000; suffix = "pub"; };
+            private = { uid = 2001; gid = 2001; suffix = "priv"; };
+            secret = { uid = 2002; gid = 2002; suffix = "sec"; };
+          }.${vmType};
           hostNvidia = (!vm) && nvidia;
           rtxPassthrough = (!vm) && (!nvidia);
           vfioPciIds =
@@ -234,8 +239,8 @@
             + lib.optionalString gnome "-gui"
             + lib.optionalString firefox "-ff"
             + lib.optionalString vscodium "-vs"
-            + lib.optionalString sudo "-su"
-            + lib.optionalString vsock "-vsock";
+            + lib.optionalString vsock "-vsock"
+            + lib.optionalString vm "-${vmIdentity.suffix}";
           ukiName = "${imageName}-BOOTX64";
         in
         lib.nixosSystem {
@@ -315,18 +320,15 @@
                     PermitRootLogin = "prohibit-password";
                     AllowUsers = [
                       "root"
-                      "nixos"
+                    ] ++ (if vm then [ "nixos" ] else [
                       "public"
                       "private"
                       "secret"
-                    ];
+                    ]);
                   };
                 };
 
-                security.sudo = {
-                  enable = sudo;
-                }
-                // lib.optionalAttrs sudo { wheelNeedsPassword = false; };
+                security.sudo.enable = false;
 
                 users.mutableUsers = false;
                 users.users = {
@@ -335,13 +337,17 @@
                     openssh.authorizedKeys.keys = [ yubiSshKey ];
                   };
 
-                  nixos = {
+                  nixos = lib.mkIf vm {
                     isNormalUser = true;
+                    uid = vmIdentity.uid;
+                    group = "nixos";
+                    autoSubUidGidRange = false;
+                    subUidRanges = [ { startUid = 100000; count = 65536; } ];
+                    subGidRanges = [ { startGid = 100000; count = 65536; } ];
                     linger = true;
                     hashedPassword = password;
                     extraGroups =
-                      lib.optionals sudo [ "wheel" ]
-                      ++ lib.optionals (!vm) [
+                      lib.optionals (!vm) [
                         "kvm"
                         "libvirtd"
                         "tss"
@@ -353,7 +359,7 @@
                     openssh.authorizedKeys.keys = authorizedSshKeys;
                   };
 
-                  public = {
+                  public = lib.mkIf (!vm) {
                     isNormalUser = true;
                     linger = true;
                     hashedPassword = password;
@@ -363,7 +369,7 @@
                     group = "public";
                   };
 
-                  private = {
+                  private = lib.mkIf (!vm) {
                     isNormalUser = true;
                     linger = true;
                     hashedPassword = password;
@@ -373,7 +379,7 @@
                     group = "private";
                   };
 
-                  secret = {
+                  secret = lib.mkIf (!vm) {
                     isNormalUser = true;
                     linger = true;
                     hashedPassword = password;
@@ -386,6 +392,9 @@
 
                 users.groups = {
                   kvm.members = lib.optionals (!vm) [ "qemu-libvirtd" ];
+                } // lib.optionalAttrs vm {
+                  nixos.gid = vmIdentity.gid;
+                } // lib.optionalAttrs (!vm) {
                   public.gid = 2000;
                   private.gid = 2001;
                   secret.gid = 2002;
@@ -657,7 +666,7 @@
                   after = [ "network.target" ];
                   serviceConfig = {
                     Type = "simple";
-                    User = "nixos";
+                    User = if vm then "nixos" else "public";
                     Group = "users";
                   };
                   script = ''
@@ -688,11 +697,27 @@
           containers = true;
           gnome = true;
           scalingFactor = 2;
-          sudo = true;
           password = mainPassword;
         };
-        vm = stateless {
+        vm-pub = stateless {
           vm = true;
+          vmType = "public";
+          nvidia = true;
+          containers = true;
+          vsock = true;
+          password = "";
+        };
+        vm-priv = stateless {
+          vm = true;
+          vmType = "private";
+          nvidia = true;
+          containers = true;
+          vsock = true;
+          password = "";
+        };
+        vm-sec = stateless {
+          vm = true;
+          vmType = "secret";
           nvidia = true;
           containers = true;
           vsock = true;
@@ -702,7 +727,9 @@
 
       packages.${system} = {
         host = self.nixosConfigurations.host.config.system.build.uki;
-        vm = self.nixosConfigurations.vm.config.system.build.uki;
+        vm-pub = self.nixosConfigurations.vm-pub.config.system.build.uki;
+        vm-priv = self.nixosConfigurations.vm-priv.config.system.build.uki;
+        vm-sec = self.nixosConfigurations.vm-sec.config.system.build.uki;
       };
     };
 }
