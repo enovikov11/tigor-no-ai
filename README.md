@@ -14,23 +14,32 @@ See also https://github.com/enovikov11/tigor-ai
 
 ## VM arch
 
+### Files initial setup
+
 mkdir -p /ssd/{public,private,secret}/{ro,cache-img,uki}
 mkdir -p /hdd/{public,private,secret}/{ro,rw-img,host}
 mkdir -p /hdd/public/host/telegraf /hdd/root/keys
+
+chown -R public:public /{ssd,hdd}/public
+chown -R private:private /{ssd,hdd}/private
+chown -R secret:secret /{ssd,hdd}/secret
+chown -R root:root /hdd/root
+
+find /ssd /hdd -type d -exec chmod 700 {} +
+find /ssd /hdd -type f -exec chmod 600 {} +
+
+find /ssd/public /hdd/public -type d -exec chmod 755 {} +
+find /ssd/public /hdd/public -type f -exec chmod 644 {} +
+
+chmod 755 /ssd /hdd
+
+### Sharing
 
 /ssd/public/ro -> vitiofs:ssd-ro -> /ssd/public/ro
 /ssd/public/rw-img/hermes.qcow2 -> dev:rw -> /home/nixos/data
 /ssd/public/cache-img/hermes.qcow2 -> dev:cache -> /home/nixos
 
-gid public 2000 = uid public 2000
-gid private 2001 = uid private 2001
-gid secret 2002 = uid secret 2002
-
-/{ssd,hdd}/public public:public rwx-rwx-0
-/{ssd,hdd}/public/ro public:public rwx-rwx-r
-
-/{ssd,hdd}/private private:private rwx-rwx-0
-/{ssd,hdd}/secret secret:secret rwx-rwx-0
+### ZFS mount
 
 mkdir -p /hdd /ssd
 
@@ -95,11 +104,6 @@ codeberg.org/forgejo/forgejo:16
 podman pull docker.io/vllm/vllm-openai:nightly
 podman save docker.io/vllm/vllm-openai:nightly | gzip > /home/nixos/vllm.tar.gz
 gunzip -c vllm.tar.gz | podman load
-
-cd /ssd/internet
-chown -R nixos:users .
-find . -type d -exec chmod 2775 {} +
-find . -type f -exec chmod 664 {} +
 
 podman load < result
 ls /run/netns
