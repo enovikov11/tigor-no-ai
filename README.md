@@ -12,6 +12,34 @@ See also https://github.com/enovikov11/tigor-ai
 | Private | Data diode   | KVM            | No              | Public + Private |
 | Secret  | No           | KVM + SEV-ES   | Yes             | No               |
 
+## VM arch
+
+/{ssd,hdd}/{public,private,secret}/{ro,rw-img,cache-img,host-data,uki}
+/hdd/root
+
+public:public
+private:private
+secret:secret
+
+uid public 2000
+uid private 2001
+uid secret 2002
+
+gid public 2000 = uid public + uid private + uid secret
+gid private 2001 = uid private
+gid secret 2002 = uid secret
+
+mkdir -p /hdd /ssd
+
+zpool import -N -R /run/zfs-untrusted/hdd hdd
+zpool import -N -R /run/zfs-untrusted/ssd ssd
+
+zfs load-key hdd/enc
+zfs load-key ssd/enc
+
+mount -t zfs -o nodev,nosuid,noexec hdd/enc /hdd
+mount -t zfs -o nodev,nosuid,noexec ssd/enc /ssd
+
 ## Build
 
 cd /etc/tigor/
@@ -84,6 +112,9 @@ model="primitive-ai/Qwen3.8-Flash-Next-NVFP4"
 hf download $model --local-dir "/data/$model"
 
 ## TODO
+
+vm ssh key in cache store
+vm autostart from cache service
 
 Gateway: matrix, element.io X/Web, Synapse, mattermost
 Memory: https://github.com/plastic-labs/honcho honcho.dev, qdrant, graphify
