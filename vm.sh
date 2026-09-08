@@ -28,7 +28,7 @@ vm_setup_wireguard() {
 
     ip netns add "ns-${vm_name}"
     ip link add "wg-${vm_name}" type wireguard
-    wg setconf "wg-${vm_name}" "/ssd/public/vm/hermes/user2.conf"
+    wg setconf "wg-${vm_name}" "/hdd/root/keys/user2.conf"
     ip link set "wg-${vm_name}" netns "ns-${vm_name}"
 
     ip -n "ns-${vm_name}" addr add 10.67.69.2/24 dev "wg-${vm_name}"
@@ -164,8 +164,8 @@ vm_start_hermes() {
     # Prefer /run/tigor-vm/${vm_name}/ with separate helper subdirectories and
     # ownership. QEMU only needs search/connect access; helpers should not share
     # one writable socket directory.
-    vm_kernel="/ssd/public/vm/kernels/vm-r73-nvda-pods-vsock-BOOTX64.efi"
-    vm_disk="/ssd/public/vm/hermes/hermes.qcow2"
+    vm_kernel="/ssd/public/uki/vm-r100-nvda-pods-vsock-BOOTX64.efi"
+    vm_disk="/ssd/public/cache-img/hermes.qcow2"
     vm_cpu="128"
     vm_ram="256"
     vm_gpu="1"
@@ -175,11 +175,9 @@ vm_start_hermes() {
     vm_setup_wireguard
     vm_mac="52:54:00:a9:f5:da" vm_socket="/run/${vm_name}-passt.sock" vm_add_passt
 
-    id="fs-ssd-internet" vm_src="/ssd/public/internet" vm_dst="/ssd/public/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" vm_add_virtiofsd
-    id="fs-hdd-internet" vm_src="/hdd/public/internet" vm_dst="/hdd/public/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" vm_add_virtiofsd
-    id="fs-hermes" vm_src="/ssd/public/vm/hermes/data" vm_dst="/ssd/public/vm/hermes/data" vm_ro="0" vm_socket="/run/${vm_name}-hermes.sock" vm_add_virtiofsd
-    id="fs-telegraf" vm_src="/ssd/public/vm/hermes/telegraf" vm_dst="/ssd/nixos/telegraf" vm_ro="0" vm_socket="/run/${vm_name}-telegraf.sock" vm_add_virtiofsd
-
+    id="fs-ssd-internet" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" vm_add_virtiofsd
+    id="fs-hdd-internet" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" vm_add_virtiofsd
+    
     # vm_wait_socket proves only that the pathname became a socket. Consider
     # retaining each helper PID and failing if it exits before/while QEMU starts;
     # cleanup can then kill known PIDs instead of every background shell job.

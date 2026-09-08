@@ -14,7 +14,9 @@ See also https://github.com/enovikov11/tigor-ai
 
 ## VM arch
 
-mkdir -p /{ssd,hdd}/{public,private,secret}/{ro,rw-img,cache-img,uki} /hdd/public/host-telegraf /hdd/root
+mkdir -p /ssd/{public,private,secret}/{ro,cache-img,uki}
+mkdir -p /hdd/{public,private,secret}/{ro,rw-img}
+mkdir -p /hdd/public/host-telegraf /hdd/root/keys
 
 /ssd/public/ro -> vitiofs:ssd-ro -> /ssd/public/ro
 /ssd/public/rw-img/hermes.qcow2 -> dev:rw -> /home/nixos/data
@@ -50,7 +52,7 @@ diff vm.sh vm.sh.bak
 diff vm.xsl vm.xsl.bak
 
 nix build .#vm
-cp ./result/vm-*-BOOTX64.efi /ssd/public/vm/kernels/
+cp ./result/vm-*-BOOTX64.efi /ssd/public/uki/
 echo -e '\a'
 
 nix build .#host
