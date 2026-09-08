@@ -2,15 +2,15 @@
   description = "Tigor no AI Monorepo";
 
   inputs = {
-    # 2026-08-20 https://github.com/NixOS/nixpkgs/commits/nixos-26.05/
-    nixpkgs.url = "github:NixOS/nixpkgs/5880666fd9eb563038431edb35c2d0aa595884e6";
+    # 2026-09-07 https://github.com/NixOS/nixpkgs/commits/nixos-26.05/
+    nixpkgs.url = "github:NixOS/nixpkgs/93108a538f079596c9a16c72cf03e9322782b6dd";
   };
 
   outputs =
     { self, nixpkgs, ... }:
     let
       # Number of a commit in a repo, r123 = 123th commit in tigor-no-ai
-      revision = "r73";
+      revision = "r100";
 
       # Public password hash is a tradeoff between usability and security, underlying is high entropy
       yubiSshKey = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIMltMQTMSIcxPbZLNCxkAT/MWRqJo1IFOfH95OoscQbCAAAABHNzaDo= enovikov11@novikov.local";
@@ -316,6 +316,9 @@
                     AllowUsers = [
                       "root"
                       "nixos"
+                      "public"
+                      "private"
+                      "secret"
                     ];
                   };
                 };
@@ -349,8 +352,44 @@
                       ];
                     openssh.authorizedKeys.keys = authorizedSshKeys;
                   };
+
+                  public = {
+                    isNormalUser = true;
+                    linger = true;
+                    hashedPassword = password;
+                    extraGroups = lib.optionals (!vm) [ "kvm" ];
+                    openssh.authorizedKeys.keys = authorizedSshKeys;
+                    uid = 2000;
+                    group = "public";
+                  };
+
+                  private = {
+                    isNormalUser = true;
+                    linger = true;
+                    hashedPassword = password;
+                    extraGroups = lib.optionals (!vm) [ "kvm" ];
+                    openssh.authorizedKeys.keys = authorizedSshKeys;
+                    uid = 2001;
+                    group = "private";
+                  };
+
+                  secret = {
+                    isNormalUser = true;
+                    linger = true;
+                    hashedPassword = password;
+                    extraGroups = lib.optionals (!vm) [ "kvm" ];
+                    openssh.authorizedKeys.keys = authorizedSshKeys;
+                    uid = 2002;
+                    group = "secret";
+                  };
                 };
-                users.groups.kvm.members = lib.optionals (!vm) [ "qemu-libvirtd" ];
+
+                users.groups = {
+                  kvm.members = lib.optionals (!vm) [ "qemu-libvirtd" ];
+                  public.gid = 2000;
+                  private.gid = 2001;
+                  secret.gid = 2002;
+                }
 
                 boot = {
                   supportedFilesystems = lib.optionals (!vm) [ "zfs" ];
