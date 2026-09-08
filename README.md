@@ -14,8 +14,13 @@ See also https://github.com/enovikov11/tigor-ai
 
 ## VM arch
 
-/{ssd,hdd}/{public,private,secret}/{ro,rw-img,cache-img,host-data,uki}
+/{ssd,hdd}/{public,private,secret}/{ro,rw-img,cache-img,uki}
+/hdd/public/host-telegraf
 /hdd/root
+
+/ssd/public/ro -> vitiofs:ssd-ro -> /ssd/public/ro
+/ssd/public/rw-img/hermes.qcow2 -> dev:rw -> /home/nixos/data
+/ssd/public/cache-img/hermes.qcow2 -> dev:cache -> /home/nixos
 
 public:public
 private:private
