@@ -17,7 +17,7 @@ See also https://github.com/enovikov11/tigor-ai
 ### Files initial setup
 
 mkdir -p /ssd/{public,private,secret}/{ro,cache-img,uki}
-mkdir -p /hdd/{public,private,secret}/{ro,rw-img,host}
+mkdir -p /hdd/{public,private,secret}/{ro,rw,rw-img,host}
 mkdir -p /hdd/public/host/telegraf /hdd/root/keys
 
 chown -R public:public /{ssd,hdd}/public

@@ -11,8 +11,6 @@ git remote add github-pull-and-push-to-main https://github.com/enovikov11/tigor-
 
 mkdir -p ~/tigor-ai.worktrees
 
-cp -r ~/hermes-secrets/. ~/tigor-ai/.hermes/
-
 cd ~
 git clone https://github.com/enovikov11/tigor-no-ai.git
 
