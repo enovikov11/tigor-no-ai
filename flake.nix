@@ -10,7 +10,7 @@
     { self, nixpkgs, ... }:
     let
       # Number of a commit in a repo, r123 = 123th commit in tigor-no-ai
-      revision = "r105";
+      revision = "r107";
 
       # Public password hash is a tradeoff between usability and security, underlying is high entropy
       yubiSshKey = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIMltMQTMSIcxPbZLNCxkAT/MWRqJo1IFOfH95OoscQbCAAAABHNzaDo= enovikov11@novikov.local";
@@ -18,6 +18,20 @@
 
       lib = nixpkgs.lib;
       system = "x86_64-linux";
+
+      mkDataImage = label: size: uid: gid:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.runCommand "${label}.qcow2" {
+          nativeBuildInputs = [ pkgs.e2fsprogs pkgs.qemu-utils ];
+        } ''
+          truncate -s ${size} disk.raw
+          mkfs.ext4 -F -m 0 -L ${label} \
+            -E root_owner=${toString uid}:${toString gid} \
+            disk.raw
+          qemu-img convert -f raw -O qcow2 disk.raw "$out"
+        '';
 
       gnomeModule =
         {
@@ -294,10 +308,22 @@
                 };
 
                 fileSystems."/home/nixos" = lib.mkIf vm {
-                  device = "/dev/vda";
+                  device = "/dev/disk/by-label/cache";
                   fsType = "ext4";
                   options = [
                     "noatime"
+                    "nodev"
+                    "nofail"
+                    "nosuid"
+                    "x-systemd.device-timeout=1s"
+                  ];
+                };
+                fileSystems."/home/nixos/data" = lib.mkIf vm {
+                  device = "/dev/disk/by-label/data";
+                  fsType = "ext4";
+                  options = [
+                    "noatime"
+                    "nodev"
                     "nofail"
                     "nosuid"
                     "x-systemd.device-timeout=1s"
@@ -730,6 +756,12 @@
         vm-pub = self.nixosConfigurations.vm-pub.config.system.build.uki;
         vm-priv = self.nixosConfigurations.vm-priv.config.system.build.uki;
         vm-sec = self.nixosConfigurations.vm-sec.config.system.build.uki;
+        data-pub = mkDataImage "data" "500G" 2000 2000;
+        cache-pub = mkDataImage "cache" "500G" 2000 2000;
+        data-priv = mkDataImage "data" "500G" 2001 2001;
+        cache-priv = mkDataImage "cache" "500G" 2001 2001;
+        data-sec = mkDataImage "data" "500G" 2002 2002;
+        cache-sec = mkDataImage "cache" "500G" 2002 2002;
       };
     };
 }
