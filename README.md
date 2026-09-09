@@ -14,6 +14,8 @@ See also https://github.com/enovikov11/tigor-ai
 
 ## VM arch
 
+gnome-session
+
 ### Files initial setup
 
 mkdir -p /ssd/{public,private,secret}/{ro,cache-img,uki}
@@ -114,6 +116,7 @@ hf download $model --local-dir "/data/$model"
 
 ## TODO
 
+zvol
 vm ssh key in cache store
 vm autostart from cache service
 

@@ -2,15 +2,15 @@
   description = "Tigor no AI Monorepo";
 
   inputs = {
-    # 2026-09-07 https://github.com/NixOS/nixpkgs/commits/nixos-26.05/
-    nixpkgs.url = "github:NixOS/nixpkgs/93108a538f079596c9a16c72cf03e9322782b6dd";
+    # 2026-09-09 https://github.com/NixOS/nixpkgs/commits/nixos-26.05/
+    nixpkgs.url = "github:NixOS/nixpkgs/6aefcda9401be8acc2b74244fb3b37520ea1f0a8";
   };
 
   outputs =
     { self, nixpkgs, ... }:
     let
       # Number of a commit in a repo, r123 = 123th commit in tigor-no-ai
-      revision = "r111";
+      revision = "r112";
 
       # Public password hash is a tradeoff between usability and security, underlying is high entropy
       yubiSshKey = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIMltMQTMSIcxPbZLNCxkAT/MWRqJo1IFOfH95OoscQbCAAAABHNzaDo= enovikov11@novikov.local";
@@ -42,7 +42,7 @@
           hardware.graphics.enable = true;
 
           services.xserver.enable = true;
-          services.displayManager.gdm.enable = true;
+          services.displayManager.gdm.enable = false;
           services.desktopManager.gnome.enable = true;
 
           environment.gnome.excludePackages = with pkgs; [
@@ -97,39 +97,21 @@
             "inode/directory" = [ "org.gnome.Nautilus.desktop" ];
           };
 
-          programs.dconf.profiles = {
-            gdm.databases = [
-              {
-                settings = {
-                  "org/gnome/desktop/interface".scaling-factor = lib.gvariant.mkUint32 scalingFactor;
-                  "org/gnome/settings-daemon/plugins/power" = {
-                    sleep-inactive-ac-type = "nothing";
-                    sleep-inactive-battery-type = "nothing";
-                  };
+          programs.dconf.profiles.user.databases = [
+            {
+              settings = {
+                "org/gnome/desktop/interface".scaling-factor = lib.gvariant.mkUint32 scalingFactor;
+                "org/gnome/desktop/session".idle-delay = lib.gvariant.mkUint32 0;
+                "org/gnome/desktop/screensaver".lock-enabled = false;
+                "org/gnome/settings-daemon/plugins/housekeeping".donation-reminder-enabled = false;
+                "org/gnome/settings-daemon/plugins/power" = {
+                  sleep-inactive-ac-type = "nothing";
+                  sleep-inactive-battery-type = "nothing";
                 };
-              }
-            ];
-
-            user.databases = [
-              {
-                settings = {
-                  "org/gnome/desktop/interface".scaling-factor = lib.gvariant.mkUint32 scalingFactor;
-                  "org/gnome/desktop/session".idle-delay = lib.gvariant.mkUint32 0;
-                  "org/gnome/settings-daemon/plugins/housekeeping".donation-reminder-enabled = false;
-                  "org/gnome/settings-daemon/plugins/power" = {
-                    sleep-inactive-ac-type = "nothing";
-                    sleep-inactive-battery-type = "nothing";
-                  };
-                  "org/gnome/shell".favorite-apps = [
-                    "org.gnome.Nautilus.desktop"
-                    "org.gnome.Console.desktop"
-                    "org.gnome.DiskUtility.desktop"
-                  ]
-                  ++ lib.optionals includeVMManager [ "virt-manager.desktop" ];
-                };
-              }
-            ];
-          };
+                "org/gnome/shell".favorite-apps = lib.gvariant.mkEmptyArray lib.gvariant.type.string;
+              };
+            }
+          ];
         };
 
       nvidiaModule =
