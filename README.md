@@ -33,12 +33,6 @@ find /ssd/public /hdd/public -type f -exec chmod 644 {} +
 
 chmod 755 /ssd /hdd
 
-### Sharing
-
-/ssd/public/ro -> vitiofs:ssd-ro -> /ssd/public/ro
-/ssd/public/rw-img/hermes.qcow2 -> dev:rw -> /home/nixos/data
-/ssd/public/cache-img/hermes.qcow2 -> dev:cache -> /home/nixos
-
 ### ZFS mount
 
 mkdir -p /hdd /ssd

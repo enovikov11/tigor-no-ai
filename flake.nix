@@ -10,7 +10,7 @@
     { self, nixpkgs, ... }:
     let
       # Number of a commit in a repo, r123 = 123th commit in tigor-no-ai
-      revision = "r107";
+      revision = "r111";
 
       # Public password hash is a tradeoff between usability and security, underlying is high entropy
       yubiSshKey = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIMltMQTMSIcxPbZLNCxkAT/MWRqJo1IFOfH95OoscQbCAAAABHNzaDo= enovikov11@novikov.local";
@@ -357,64 +357,63 @@
                 security.sudo.enable = false;
 
                 users.mutableUsers = false;
-                users.users = {
-                  root = {
-                    hashedPassword = "!";
-                    openssh.authorizedKeys.keys = [ yubiSshKey ];
-                  };
+                users.users =
+                  let
+                    hostUser =
+                      { uid, group }:
+                      lib.mkIf (!vm) {
+                        inherit uid group;
+                        isNormalUser = true;
+                        linger = true;
+                        hashedPassword = password;
+                        extraGroups = [
+                          "kvm"
+                          "libvirtd"
+                          "tss"
+                        ] ++ lib.optionals (gnome || nvidia) [
+                          "video"
+                          "render"
+                        ];
+                        openssh.authorizedKeys.keys = authorizedSshKeys;
+                      };
+                  in
+                  {
+                    root = {
+                      hashedPassword = "!";
+                      openssh.authorizedKeys.keys = [ yubiSshKey ];
+                    };
 
-                  nixos = lib.mkIf vm {
-                    isNormalUser = true;
-                    uid = vmIdentity.uid;
-                    group = "nixos";
-                    autoSubUidGidRange = false;
-                    subUidRanges = [ { startUid = 100000; count = 65536; } ];
-                    subGidRanges = [ { startGid = 100000; count = 65536; } ];
-                    linger = true;
-                    hashedPassword = password;
-                    extraGroups =
-                      lib.optionals (!vm) [
-                        "kvm"
-                        "libvirtd"
-                        "tss"
-                      ]
-                      ++ lib.optionals (gnome || nvidia) [
+                    nixos = lib.mkIf vm {
+                      isNormalUser = true;
+                      uid = vmIdentity.uid;
+                      group = "nixos";
+                      autoSubUidGidRange = false;
+                      subUidRanges = [ { startUid = 100000; count = 65536; } ];
+                      subGidRanges = [ { startGid = 100000; count = 65536; } ];
+                      linger = true;
+                      hashedPassword = password;
+                      extraGroups = lib.optionals (gnome || nvidia) [
                         "video"
                         "render"
                       ];
-                    openssh.authorizedKeys.keys = authorizedSshKeys;
-                  };
+                      openssh.authorizedKeys.keys = authorizedSshKeys;
+                    };
 
-                  public = lib.mkIf (!vm) {
-                    isNormalUser = true;
-                    linger = true;
-                    hashedPassword = password;
-                    extraGroups = lib.optionals (!vm) [ "kvm" ];
-                    openssh.authorizedKeys.keys = authorizedSshKeys;
-                    uid = 2000;
-                    group = "public";
-                  };
+                    public = hostUser {
+                      uid = 2000;
+                      group = "public";
+                    };
 
-                  private = lib.mkIf (!vm) {
-                    isNormalUser = true;
-                    linger = true;
-                    hashedPassword = password;
-                    extraGroups = lib.optionals (!vm) [ "kvm" ];
-                    openssh.authorizedKeys.keys = authorizedSshKeys;
-                    uid = 2001;
-                    group = "private";
-                  };
+                    private = hostUser {
+                      uid = 2001;
+                      group = "private";
+                    };
 
-                  secret = lib.mkIf (!vm) {
-                    isNormalUser = true;
-                    linger = true;
-                    hashedPassword = password;
-                    extraGroups = lib.optionals (!vm) [ "kvm" ];
-                    openssh.authorizedKeys.keys = authorizedSshKeys;
-                    uid = 2002;
-                    group = "secret";
+                    secret = hostUser {
+                      uid = 2002;
+                      group = "secret";
+                    };
                   };
-                };
 
                 users.groups = {
                   kvm.members = lib.optionals (!vm) [ "qemu-libvirtd" ];
