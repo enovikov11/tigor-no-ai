@@ -165,7 +165,7 @@ vm_start_hermes() {
     # Prefer /run/tigor-vm/${vm_name}/ with separate helper subdirectories and
     # ownership. QEMU only needs search/connect access; helpers should not share
     # one writable socket directory.
-    vm_kernel="/ssd/public/uki/vm-r105-nvda-pods-vsock-pub-BOOTX64.efi"
+    vm_kernel="/ssd/public/uki/vm-r107-nvda-pods-vsock-pub-BOOTX64.efi"
     vm_cpu="128"
     vm_ram="256"
     vm_gpu="1"
