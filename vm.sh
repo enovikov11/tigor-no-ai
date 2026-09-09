@@ -20,6 +20,7 @@ vm_cleanup() {
     wait 2>/dev/null || true
 
     ip netns del "ns-${vm_name}" 2>/dev/null || true
+    ip link del "wg-${vm_name}" 2>/dev/null || true
 }
 
 vm_setup_wireguard() {
@@ -34,11 +35,6 @@ vm_setup_wireguard() {
     ip -n "ns-${vm_name}" addr add 10.67.69.2/24 dev "wg-${vm_name}"
     ip -n "ns-${vm_name}" link set "wg-${vm_name}" up
     ip -n "ns-${vm_name}" route add default via 10.67.69.1 dev "wg-${vm_name}"
-    # If passt becomes a real unprivileged host UID while keeping
-    # --tcp-ports all/--udp-ports all, consider setting inside this netns:
-    #   sysctl -w net.ipv4.ip_unprivileged_port_start=0
-    # This avoids CAP_NET_BIND_SERVICE solely for ports <1024. If "all" inbound
-    # ports are not intentional, prefer an explicit port allowlist.
 }
 
 vm_wait_socket() {
@@ -115,6 +111,12 @@ vm_add_virtiofsd() {
     )
 }
 
+vm_add_disk() {
+    vm_args+=(
+        -drive "file=${vm_disk},if=virtio,format=qcow2,discard=unmap"
+    )
+}
+
 vm_run_qemu() {
     # bwrap:
     # bwrap --unshare-all --cap-drop ALL --die-with-parent \\
@@ -148,7 +150,6 @@ vm_run_qemu() {
         -device vhost-vsock-pci,guest-cid=3 \
         -serial stdio \
         -monitor none \
-        -drive file="${vm_disk}",if=virtio,format=qcow2,discard=unmap \
         -object iommufd,id=iommufd0 \
         -device vfio-pci,host=0000:41:00.0,iommufd=iommufd0 \
         -device vfio-pci,host=0000:41:00.1,iommufd=iommufd0 \
@@ -165,18 +166,20 @@ vm_start_hermes() {
     # ownership. QEMU only needs search/connect access; helpers should not share
     # one writable socket directory.
     vm_kernel="/ssd/public/uki/vm-r105-nvda-pods-vsock-pub-BOOTX64.efi"
-    vm_disk="/ssd/public/cache-img/hermes.qcow2"
     vm_cpu="128"
     vm_ram="256"
     vm_gpu="1"
     vm_vsock="1"
     vm_ui="1"
 
+    vm_disk="/ssd/public/cache-img/hermes.qcow2" vm_add_disk
+    vm_disk="/hdd/public/rw-img/hermes.qcow2" vm_add_disk
+
     vm_setup_wireguard
     vm_mac="52:54:00:a9:f5:da" vm_socket="/run/${vm_name}-passt.sock" vm_add_passt
 
-    id="fs-ssd-internet" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" vm_add_virtiofsd
-    id="fs-hdd-internet" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" vm_add_virtiofsd
+    id="fs-ssd-internet" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" vm_add_virtiofsd
+    id="fs-hdd-internet" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" vm_add_virtiofsd
     
     # vm_wait_socket proves only that the pathname became a socket. Consider
     # retaining each helper PID and failing if it exits before/while QEMU starts;
