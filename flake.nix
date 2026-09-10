@@ -10,7 +10,7 @@
     { self, nixpkgs, ... }:
     let
       # Number of a commit in a repo, r123 = 123th commit in tigor-no-ai
-      revision = "r113";
+      revision = "r114";
 
       # Public password hash is a tradeoff between usability and security, underlying is high entropy
       yubiSshKey = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIMltMQTMSIcxPbZLNCxkAT/MWRqJo1IFOfH95OoscQbCAAAABHNzaDo= enovikov11@novikov.local";
@@ -350,7 +350,6 @@
                         extraGroups = [
                           "kvm"
                           "libvirtd"
-                          "tss"
                         ] ++ lib.optionals (gnome || nvidia) [
                           "video"
                           "render"
