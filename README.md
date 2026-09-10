@@ -61,6 +61,8 @@ cp ./result/vm-*-BOOTX64.efi /ssd/public/uki/
 echo -e '\a'
 
 nix build .#host
+echo -e '\a'
+
 mkdir /root/mnt
 mount /dev/sde1 /root/mnt
 df -h /root/mnt
@@ -68,7 +70,10 @@ mv /root/mnt/EFI/BOOT/BOOTX64.efi /root/mnt/EFI/BOOT/"$(date '+%Y-%m-%d_%H-%M-%S
 cp ./result/host-*-BOOTX64.efi /root/mnt/EFI/BOOT/BOOTX64.efi
 echo -e '\a'
 
-sync && reboot now
+sync
+echo -e '\a'
+
+reboot now
 
 ## Code
 
@@ -115,6 +120,8 @@ model="primitive-ai/Qwen3.8-Flash-Next-NVFP4"
 hf download $model --local-dir "/data/$model"
 
 ## TODO
+
+tmux server
 
 zvol
 vm ssh key in cache store
