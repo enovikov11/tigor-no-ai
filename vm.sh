@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# Sandbox/hardening direction (comments only; not implemented below):
-# - Keep the privileged launcher for netns/WireGuard/VFIO setup, but run passt,
-#   virtiofsd and QEMU under dedicated *real host* UIDs before entering bwrap.
-# - bwrap starts with an empty mount namespace/root: prefer exact
-#   --ro-bind/--bind/--dev-bind allowances instead of --ro-bind / / + masking.
-# - Useful flags where compatible: --die-with-parent --new-session --clearenv
-#   --cap-drop ALL. --unshare-all is a good baseline, but user/cgroup use "try"
-#   semantics; add explicit --unshare-user/--unshare-cgroup if failure must fail.
-# - On NixOS, --ro-bind /nix/store /nix/store is a convenient initial runtime
-#   closure; tighter per-program store closures can come later if worthwhile.
-# - Treat inherited FDs as sandbox capabilities: use CLOEXEC for unrelated FDs
-#   and audit /proc/$pid/fd for every guest-facing child after startup.
 
 vm_cleanup() {
     trap - EXIT INT TERM
@@ -49,14 +37,6 @@ vm_wait_socket() {
 
 vm_add_passt() {
     rm -f "$vm_socket"
-    # bwrap:
-    # ip netns exec "ns-${vm_name}" bwrap \\
-    #     --unshare-all --share-net --cap-drop ALL --die-with-parent \\
-    #     --ro-bind /nix/store /nix/store --dev-bind /dev /dev \\
-    #     --ro-bind /proc /proc \\
-    #     --bind "$(dirname "$vm_socket")" "$(dirname "$vm_socket")" \\
-    #     --ro-bind "$(which passt)" "$(which passt)" \\
-    #     passt \\
 
     ip netns exec "ns-${vm_name}" passt \
         --foreground \
@@ -87,14 +67,6 @@ vm_add_passt() {
 
 vm_add_virtiofsd() {
     rm -f "$vm_socket"
-    # bwrap:
-    # bwrap --unshare-all --cap-drop ALL --die-with-parent \\
-    #     --ro-bind /nix/store /nix/store \\
-    #     --ro-bind "$vm_src" "$vm_src" \\
-    #     --bind "$(dirname "$vm_socket")" "$(dirname "$vm_socket")" \\
-    #     --ro-bind /proc /proc \\
-    #     --ro-bind "$(which virtiofsd)" "$(which virtiofsd)" \\
-    #     virtiofsd --socket-path="$vm_socket" --shared-dir="$vm_src" --readonly &
 
     if ((vm_ro)); then
         virtiofsd --socket-path="$vm_socket" --shared-dir="$vm_src" --readonly &
@@ -103,8 +75,7 @@ vm_add_virtiofsd() {
     fi
 
     vm_wait_socket
-    # NOTE: ${id} is consumed below with set -u enabled; each caller must set a
-    # unique id before vm_add_virtiofsd or the script aborts here.
+
     vm_args+=(
         -chardev "socket,id=${id},path=${vm_socket}"
         -device "vhost-user-fs-pci,chardev=${id},tag=${vm_dst}"
@@ -117,21 +88,27 @@ vm_add_disk() {
     )
 }
 
+vm_add_gpu() {
+    vm_args+=(
+        -object "iommufd,id=iommufd0"
+        -device "vfio-pci,host=0000:41:00.0,iommufd=iommufd0"
+        -device "vfio-pci,host=0000:41:00.1,iommufd=iommufd0"
+    )
+}
+
+vm_add_vsock() {
+    vm_args+=(
+        -device "vhost-vsock-pci,guest-cid=${vm_vsock}"
+    )
+}
+
+vm_add_kernel() {
+    vm_args+=(
+        -kernel "${vm_kernel}"
+    )
+}
+
 vm_run_qemu() {
-    # bwrap:
-    # bwrap --unshare-all --cap-drop ALL --die-with-parent \\
-    #     --ro-bind /nix/store /nix/store \\
-    #     --dev-bind /dev/kvm /dev/kvm \\
-    #     --dev-bind /dev/urandom /dev/urandom \\
-    #     --dev-bind /dev/iommu /dev/iommu \\
-    #     --dev-bind /dev/vfio/vfio /dev/vfio/vfio \\
-    #     --dev-bind /dev/vfio/XX /dev/vfio/XX \\
-    #     --ro-bind "/ssd/vm/${vm_name}.qcow2" "/ssd/vm/${vm_name}.qcow2" \\
-    #     --ro-bind /run/libvirt/nix-ovmf/edk2-x86_64-code.fd /run/libvirt/nix-ovmf/edk2-x86_64-code.fd \\
-    #     --ro-bind /ssd/vm/vm-r73-nvda-pods-vsock-BOOTX64.efi /ssd/vm/vm-r73-nvda-pods-vsock-BOOTX64.efi \\
-    #     --bind /run /run \\
-    #     --ro-bind "$(which qemu-system-x86_64)" "$(which qemu-system-x86_64)" \\
-    #     qemu-system-x86_64 \\
     qemu-system-x86_64 \
         -nodefaults \
         -no-user-config \
@@ -142,35 +119,24 @@ vm_run_qemu() {
         -smp ${vm_cpu} \
         -rtc base=utc \
         -drive if=pflash,format=raw,readonly=on,file=/run/libvirt/nix-ovmf/edk2-x86_64-code.fd \
-        -kernel ${vm_kernel} \
         -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
         -object rng-random,id=rng,filename=/dev/urandom \
         -device virtio-rng-pci,rng=rng \
-        -display none \
-        -device vhost-vsock-pci,guest-cid=3 \
         -serial stdio \
+        -display none \
         -monitor none \
-        -object iommufd,id=iommufd0 \
-        -device vfio-pci,host=0000:41:00.0,iommufd=iommufd0 \
-        -device vfio-pci,host=0000:41:00.1,iommufd=iommufd0 \
         "${vm_args[@]}"
 }
 
-vm_start_hermes() {
+vm_hermes() {
     vm_name="hermes"
-
     trap vm_cleanup EXIT INT TERM
 
     vm_args=()
-    # Prefer /run/tigor-vm/${vm_name}/ with separate helper subdirectories and
-    # ownership. QEMU only needs search/connect access; helpers should not share
-    # one writable socket directory.
-    vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi"
-    vm_cpu="128"
-    vm_ram="256"
-    vm_gpu="1"
-    vm_vsock="1"
-    vm_ui="1"
+    vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi" vm_add_kernel
+
+    vm_add_gpu
+    vm_vsock="3" vm_add_vsock
 
     vm_disk="/ssd/public/cache-img/hermes.qcow2" vm_add_disk
     vm_disk="/hdd/public/rw-img/hermes.qcow2" vm_add_disk
@@ -181,12 +147,6 @@ vm_start_hermes() {
     id="fs-ssd-internet" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" vm_add_virtiofsd
     id="fs-hdd-internet" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" vm_add_virtiofsd
     
-    # vm_wait_socket proves only that the pathname became a socket. Consider
-    # retaining each helper PID and failing if it exits before/while QEMU starts;
-    # cleanup can then kill known PIDs instead of every background shell job.
-    vm_run_qemu
-
+    vm_ram="256" vm_cpu="128" vm_run_qemu
     vm_cleanup
 }
-
-vm_start_hermes

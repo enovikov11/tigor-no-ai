@@ -89,7 +89,7 @@ ssh box
 ssh -J box root@127.0.0.1 -p 2222
 
 ssh-keygen -R vm
-ssh -o 'ProxyCommand=ssh box socat - VSOCK-CONNECT:3:22' root@vm
+ssh -o 'ProxyCommand=ssh root@box socat - VSOCK-CONNECT:3:22' root@vm
 
 qemu-img create -f qcow2 /ssd/vm/hermes.qcow2 500G
 mkfs.ext4 -L data /dev/vda
@@ -120,6 +120,9 @@ model="primitive-ai/Qwen3.8-Flash-Next-NVFP4"
 hf download $model --local-dir "/data/$model"
 
 ## TODO
+
+systemd-creds decrypt
+cloud hypervisor
 
 tmux server
 
