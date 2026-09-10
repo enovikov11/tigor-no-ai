@@ -10,7 +10,7 @@
     { self, nixpkgs, ... }:
     let
       # Number of a commit in a repo, r123 = 123th commit in tigor-no-ai
-      revision = "r112";
+      revision = "r113";
 
       # Public password hash is a tradeoff between usability and security, underlying is high entropy
       yubiSshKey = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIMltMQTMSIcxPbZLNCxkAT/MWRqJo1IFOfH95OoscQbCAAAABHNzaDo= enovikov11@novikov.local";
@@ -34,16 +34,16 @@
         '';
 
       gnomeModule =
-        {
-          scalingFactor,
-          includeVMManager ? false,
-        }:
+        { scalingFactor }:
         { lib, pkgs, ... }: {
           hardware.graphics.enable = true;
 
-          services.xserver.enable = true;
+          services.xserver.enable = false;
+          services.xserver.displayManager.lightdm.enable = false;
           services.displayManager.gdm.enable = false;
           services.desktopManager.gnome.enable = true;
+
+          security.pam.services.login.rules.session.systemd.settings.type = "wayland";
 
           environment.gnome.excludePackages = with pkgs; [
             gnome-backgrounds
@@ -108,7 +108,6 @@
                   sleep-inactive-ac-type = "nothing";
                   sleep-inactive-battery-type = "nothing";
                 };
-                "org/gnome/shell".favorite-apps = lib.gvariant.mkEmptyArray lib.gvariant.type.string;
               };
             }
           ];
@@ -689,7 +688,6 @@
           ]
           ++ lib.optional gnome (gnomeModule {
             inherit scalingFactor;
-            includeVMManager = (!vm);
           })
           ++ lib.optional nvidia (nvidiaModule {
             inherit gnome;
