@@ -92,14 +92,10 @@ ssh-keygen -R vm
 ssh -o 'ProxyCommand=ssh root@box socat - VSOCK-CONNECT:3:22' root@vm
 
 qemu-img create -f qcow2 /ssd/vm/hermes.qcow2 500G
-mkfs.ext4 -L data /dev/vda
-chown -R nixos:users /home/nixos
 
-nixos-rebuild switch --flake .#vm --override flake.nix '{ modules = [{ networking.firewall.enable = true; }]; }'
+nixos-rebuild switch --flake .#vm
 
-sshfs nixos@10.67.69.2:/home/nixos /home/nixos -o Port=2222,reconnect
 echo o > /proc/sysrq-trigger
-nft flush ruleset
 
 codeberg.org/forgejo/forgejo:16
 podman pull docker.io/vllm/vllm-openai:nightly
@@ -110,8 +106,6 @@ podman load < result
 ls /run/netns
 virsh undefine hermes --nvram
 xsltproc --nonet vm.xsl vm.xsl
-
-chmod 777 /run/user/1000/podman/podman.sock
 
 podman run -it --rm --name hf-downloader -v /ssd/public/internet/huggingface.co-temp:/data docker.io/library/python:3.12-slim bash
 pip install -q huggingface_hub

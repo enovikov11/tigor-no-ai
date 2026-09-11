@@ -146,6 +146,12 @@ cloud_gpu() {
     )
 }
 
+cloud_usb() {
+    cloud_args+=(
+        --device "path=/sys/bus/pci/devices/0000:04:00.3"
+    )
+}
+
 cloud_vsock() {
     cloud_args+=(
         --vsock "cid=${vm_vsock},socket=/run/${vm_name}-vsock.sock"
@@ -158,6 +164,11 @@ cloud_disk() {
     )
 }
 
+cloud_iso() {
+    cloud_args+=(
+        --disk "path=${vm_iso},image_type=raw,readonly=on"
+    )
+}
 
 cloud_net() {
     cloud_args+=(
@@ -182,6 +193,21 @@ cloud_run() {
         --console off \
         --seccomp true \
         "${cloud_args[@]}"
+}
+
+run_vm1() {
+    vm_name="vm1"
+    trap vm_cleanup EXIT INT TERM
+
+    cloud_args=()
+    cloud_gpu
+    cloud_usb
+
+    vm_iso="" cloud_iso
+    vm_disk="/hdd/private/rw-img/vm1.qcow2" cloud_disk
+
+    vm_ram="32" vm_cpu="32" cloud_run
+    vm_cleanup
 }
 
 # vms
