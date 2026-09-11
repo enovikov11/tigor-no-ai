@@ -108,7 +108,7 @@ vm_run_qemu() {
         --cpus "boot=${vm_cpu}" \
         --memory "size=${vm_ram}G,shared=on,hugepages=on,hugepage_size=1G" \
         --platform iommufd=on,vfio_p2p_dma=off \
-        --kernel "/etc/tigor/CLOUDHV.fd" \
+        --firmware "/etc/tigor/CLOUDHV.fd" \
         --rng src=/dev/urandom \
         --serial tty \
         --console off \
