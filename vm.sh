@@ -17,12 +17,12 @@ vm_setup_wireguard() {
 
     ip netns add "ns-${vm_name}"
     ip link add "wg-${vm_name}" type wireguard
-    wg setconf "wg-${vm_name}" "/hdd/root/keys/user2.conf"
+    wg setconf "wg-${vm_name}" "${vm_conf}"
     ip link set "wg-${vm_name}" netns "ns-${vm_name}"
 
-    ip -n "ns-${vm_name}" addr add 10.67.69.2/24 dev "wg-${vm_name}"
+    ip -n "ns-${vm_name}" addr add ${vm_ip}/${vm_mask} dev "wg-${vm_name}"
     ip -n "ns-${vm_name}" link set "wg-${vm_name}" up
-    ip -n "ns-${vm_name}" route add default via 10.67.69.1 dev "wg-${vm_name}"
+    ip -n "ns-${vm_name}" route add default via ${vm_gateway} dev "wg-${vm_name}"
 }
 
 vm_wait_socket() {
@@ -35,7 +35,33 @@ vm_wait_socket() {
     return 1
 }
 
-vm_add_passt() {
+qemu_kernel() {
+    qemu_args+=(
+        -kernel "${vm_kernel}"
+    )
+}
+
+qemu_gpu() {
+    qemu_args+=(
+        -object "iommufd,id=iommufd0"
+        -device "vfio-pci,host=0000:41:00.0,iommufd=iommufd0"
+        -device "vfio-pci,host=0000:41:00.1,iommufd=iommufd0"
+    )
+}
+
+qemu_vsock() {
+    qemu_args+=(
+        -device "vhost-vsock-pci,guest-cid=${vm_vsock}"
+    )
+}
+
+qemu_disk() {
+    qemu_args+=(
+        -drive "file=${vm_disk},if=virtio,format=qcow2,discard=unmap"
+    )
+}
+
+qemu_net() {
     rm -f "$vm_socket"
 
     ip netns exec "ns-${vm_name}" passt \
@@ -47,25 +73,25 @@ vm_add_passt() {
         --outbound-if4 "wg-${vm_name}" \
         --ipv4-only \
         --mtu 1420 \
-        --address 10.67.69.2 \
-        --netmask 24 \
-        --gateway 10.67.69.1 \
-        -D 8.8.8.8 \
+        --address ${vm_ip} \
+        --netmask ${vm_mask} \
+        --gateway ${vm_gateway} \
+        -D ${vm_dns} \
         --no-map-gw \
         --map-host-loopback none \
         --map-guest-addr none \
-        --tcp-ports all \
-        --udp-ports all &
+        --tcp-ports ${vm_tcp} \
+        --udp-ports ${vm_udp} &
 
     vm_wait_socket
-    vm_args+=(
+    qemu_args+=(
         -chardev "socket,id=net0,path=${vm_socket}"
         -netdev "vhost-user,chardev=net0,id=net"
         -device "virtio-net-pci,netdev=net,mac=${vm_mac},romfile="
     )
 }
 
-vm_add_virtiofsd() {
+qemu_share() {
     rm -f "$vm_socket"
 
     if ((vm_ro)); then
@@ -76,39 +102,13 @@ vm_add_virtiofsd() {
 
     vm_wait_socket
 
-    vm_args+=(
-        -chardev "socket,id=${id},path=${vm_socket}"
-        -device "vhost-user-fs-pci,chardev=${id},tag=${vm_dst}"
+    qemu_args+=(
+        -chardev "socket,id=${vm_fs_id},path=${vm_socket}"
+        -device "vhost-user-fs-pci,chardev=${vm_fs_id},tag=${vm_dst}"
     )
 }
 
-vm_add_disk() {
-    vm_args+=(
-        -drive "file=${vm_disk},if=virtio,format=qcow2,discard=unmap"
-    )
-}
-
-vm_add_gpu() {
-    vm_args+=(
-        -object "iommufd,id=iommufd0"
-        -device "vfio-pci,host=0000:41:00.0,iommufd=iommufd0"
-        -device "vfio-pci,host=0000:41:00.1,iommufd=iommufd0"
-    )
-}
-
-vm_add_vsock() {
-    vm_args+=(
-        -device "vhost-vsock-pci,guest-cid=${vm_vsock}"
-    )
-}
-
-vm_add_kernel() {
-    vm_args+=(
-        -kernel "${vm_kernel}"
-    )
-}
-
-vm_run_qemu() {
+qemu_run() {
     qemu-system-x86_64 \
         -nodefaults \
         -no-user-config \
@@ -125,28 +125,32 @@ vm_run_qemu() {
         -serial stdio \
         -display none \
         -monitor none \
-        "${vm_args[@]}"
+        "${qemu_args[@]}"
 }
 
-vm_hermes() {
+run_hermes() {
     vm_name="hermes"
     trap vm_cleanup EXIT INT TERM
 
-    vm_args=()
-    vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi" vm_add_kernel
+    qemu_args=()
+    vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi" qemu_kernel
 
-    vm_add_gpu
-    vm_vsock="3" vm_add_vsock
+    qemu_gpu
+    vm_vsock="3" qemu_vsock
 
-    vm_disk="/ssd/public/cache-img/hermes.qcow2" vm_add_disk
-    vm_disk="/hdd/public/rw-img/hermes.qcow2" vm_add_disk
+    vm_disk="/ssd/public/cache-img/hermes.qcow2" qemu_disk
+    vm_disk="/hdd/public/rw-img/hermes.qcow2" qemu_disk
 
-    vm_setup_wireguard
-    vm_mac="52:54:00:a9:f5:da" vm_socket="/run/${vm_name}-passt.sock" vm_add_passt
+    vm_ip="10.67.69.2"
+    vm_mask="24"
+    vm_gateway="10.67.69.1"
 
-    id="fs-ssd-internet" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" vm_add_virtiofsd
-    id="fs-hdd-internet" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" vm_add_virtiofsd
+    vm_conf="/hdd/root/keys/user2.conf" vm_setup_wireguard
+    vm_dns="8.8.8.8" vm_tcp="all" vm_udp="all" vm_mac="52:54:00:a9:f5:da" vm_socket="/run/${vm_name}-passt.sock" qemu_net
+
+    vm_fs_id="fs-ssd-internet" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" qemu_share
+    vm_fs_id="fs-hdd-internet" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" qemu_share
     
-    vm_ram="256" vm_cpu="128" vm_run_qemu
+    vm_ram="256" vm_cpu="128" qemu_run
     vm_cleanup
 }
