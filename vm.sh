@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# general
+
 vm_cleanup() {
     trap - EXIT INT TERM
 
@@ -34,6 +36,8 @@ vm_wait_socket() {
     echo "Socket did not appear: $vm_socket" >&2
     return 1
 }
+
+# qemu
 
 qemu_kernel() {
     qemu_args+=(
@@ -127,6 +131,60 @@ qemu_run() {
         -monitor none \
         "${qemu_args[@]}"
 }
+
+# cloud
+
+cloud_boot() {
+    cloud_args+=(
+        --disk "path=${vm_boot},image_type=raw,readonly=on"
+    )
+}
+
+cloud_gpu() {
+    cloud_args+=(
+        --device "path=/sys/bus/pci/devices/0000:41:00.0" "path=/sys/bus/pci/devices/0000:41:00.1"
+    )
+}
+
+cloud_vsock() {
+    cloud_args+=(
+        --vsock "cid=${vm_vsock},socket=/run/${vm_name}-vsock.sock"
+    )
+}
+
+cloud_disk() {
+    cloud_args+=(
+        --disk "path=${vm_disk},image_type=qcow2,backing_files=on,sparse=on"
+    )
+}
+
+
+cloud_net() {
+    cloud_args+=(
+        --net "vhost_user=true,socket=${vm_socket},vhost_mode=client,mac=${vm_mac},num_queues=2,queue_size=256"
+    )
+}
+
+cloud_share() {
+    cloud_args+=(
+        --fs "socket=${vm_socket},tag=${vm_dst},id=${vm_fs_id}"
+    )
+}
+
+cloud_run() {
+    cloud-hypervisor \
+        --cpus "boot=${vm_cpu}" \
+        --memory "size=${vm_ram}G,shared=on,hugepages=on,hugepage_size=1G" \
+        --platform iommufd=on,vfio_p2p_dma=off \
+        --firmware "/etc/tigor/CLOUDHV.fd" \
+        --rng src=/dev/urandom \
+        --serial tty \
+        --console off \
+        --seccomp true \
+        "${cloud_args[@]}"
+}
+
+# vms
 
 run_hermes() {
     vm_name="hermes"
