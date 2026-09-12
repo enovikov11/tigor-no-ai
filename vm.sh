@@ -40,6 +40,10 @@ vm_init() { qemu_args=(); cloud_args=(); }
 
 add_qemu_kernel() { qemu_args+=( -kernel "${vm_kernel}" ); }
 
+add_qemu_boot_iso() { qemu_args+=( -drive "file=${vm_iso},if=ide,index=${vm_iso_index},media=cdrom,readonly=on" -boot d ); }
+
+add_qemu_iso() { qemu_args+=( -drive "file=${vm_iso},if=ide,index=${vm_iso_index},media=cdrom,readonly=on" ); }
+
 add_cloud_boot() { cloud_args+=( --disk "path=${vm_boot},image_type=raw,readonly=on" ); }
 
 add_gpu() {
@@ -171,8 +175,14 @@ run_vm1() {
     add_gpu
     add_usb
 
-    vm_disk="/hdd/private/rw-img/vm1.qcow2" add_disk
-    vm_ram="32" vm_cpu="32" run_cloud    
+    vm_fs_id="fs-ssd-pub" vm_src="/ssd/public/ro/internet" vm_dst="ssd-pub" vm_ro="1" add_share
+    vm_fs_id="fs-hdd-pub" vm_src="/hdd/public/ro/internet" vm_dst="hdd-pub" vm_ro="1" add_share
+    vm_fs_id="fs-ssd-priv" vm_src="/ssd/private/ro/internet" vm_dst="ssd-priv" vm_ro="1" add_share
+    vm_fs_id="fs-hdd-priv" vm_src="/hdd/private/ro/internet" vm_dst="hdd-priv" vm_ro="1" add_share
+
+    vm_disk="/hdd/private/rw-img/win-base.qcow2" add_disk
+
+    vm_ram="32" vm_cpu="32" run_qemu
 }
 
 run_hermes() {
