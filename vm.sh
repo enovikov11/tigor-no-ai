@@ -147,6 +147,12 @@ cloud_gpu() {
 }
 
 cloud_usb() {
+    dev=0000:04:00.3
+
+    echo "$dev" > /sys/bus/pci/devices/$dev/driver/unbind
+    echo vfio-pci > /sys/bus/pci/devices/$dev/driver_override
+    echo "$dev" > /sys/bus/pci/drivers_probe
+
     cloud_args+=(
         --device "path=/sys/bus/pci/devices/0000:04:00.3"
     )
@@ -187,7 +193,7 @@ cloud_run() {
         --cpus "boot=${vm_cpu}" \
         --memory "size=${vm_ram}G,shared=on,hugepages=on,hugepage_size=1G" \
         --platform iommufd=on,vfio_p2p_dma=off \
-        --firmware "/etc/tigor/CLOUDHV.fd" \
+        --firmware "${CLOUDHV_FIRMWARE}" \
         --rng src=/dev/urandom \
         --serial tty \
         --console off \
@@ -203,7 +209,7 @@ run_vm1() {
     cloud_gpu
     cloud_usb
 
-    vm_iso="" cloud_iso
+    vm_iso="/root/vm1.iso" cloud_iso
     vm_disk="/hdd/private/rw-img/vm1.qcow2" cloud_disk
 
     vm_ram="32" vm_cpu="32" cloud_run
