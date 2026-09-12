@@ -180,9 +180,9 @@ run_vm1() {
     vm_fs_id="fs-ssd-priv" vm_src="/ssd/private/ro/internet" vm_dst="ssd-priv" vm_ro="1" add_share
     vm_fs_id="fs-hdd-priv" vm_src="/hdd/private/ro/internet" vm_dst="hdd-priv" vm_ro="1" add_share
 
-    vm_disk="/hdd/private/rw-img/win-base.qcow2" add_disk
+    vm_disk="/hdd/private/rw-img/win-base-full.qcow2" add_disk
 
-    vm_ram="32" vm_cpu="32" run_qemu
+    vm_ram="256" vm_cpu="128" run_qemu
 }
 
 run_hermes() {

@@ -92,6 +92,7 @@ ssh-keygen -R vm
 ssh -o 'ProxyCommand=ssh root@box socat - VSOCK-CONNECT:3:22' root@vm
 
 qemu-img create -f qcow2 /ssd/vm/hermes.qcow2 500G
+qemu-img create -f qcow2 -F qcow2 -b ./win-base.qcow2 ./win-base-full.qcow2
 
 nixos-rebuild switch --flake .#vm
 
