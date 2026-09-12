@@ -3,15 +3,14 @@ set -Eeuo pipefail
 
 # general
 
-vm_cleanup() {
+cleanup() {
     trap - EXIT INT TERM
 
-    kill $(jobs -pr) 2>/dev/null || true
+    kill -- $(jobs -pr) 2>/dev/null || true
     wait 2>/dev/null || true
-
-    ip netns del "ns-${vm_name}" 2>/dev/null || true
-    ip link del "wg-${vm_name}" 2>/dev/null || true
 }
+
+trap cleanup EXIT INT TERM
 
 vm_setup_wireguard() {
     ip netns del "ns-${vm_name}" 2>/dev/null || true
@@ -37,35 +36,45 @@ vm_wait_socket() {
     return 1
 }
 
-# qemu
+vm_init() { qemu_args=(); cloud_args=(); }
 
-qemu_kernel() {
-    qemu_args+=(
-        -kernel "${vm_kernel}"
-    )
-}
+add_qemu_kernel() { qemu_args+=( -kernel "${vm_kernel}" ); }
 
-qemu_gpu() {
+add_cloud_boot() { cloud_args+=( --disk "path=${vm_boot},image_type=raw,readonly=on" ); }
+
+add_gpu() {
     qemu_args+=(
-        -object "iommufd,id=iommufd0"
         -device "vfio-pci,host=0000:41:00.0,iommufd=iommufd0"
         -device "vfio-pci,host=0000:41:00.1,iommufd=iommufd0"
     )
+
+    cloud_args+=( --device "path=/sys/bus/pci/devices/0000:41:00.0" "path=/sys/bus/pci/devices/0000:41:00.1" )
 }
 
-qemu_vsock() {
-    qemu_args+=(
-        -device "vhost-vsock-pci,guest-cid=${vm_vsock}"
-    )
+add_usb() {
+    dev=0000:04:00.3
+
+    echo "$dev" > /sys/bus/pci/devices/$dev/driver/unbind
+    echo vfio-pci > /sys/bus/pci/devices/$dev/driver_override
+    echo "$dev" > /sys/bus/pci/drivers_probe
+
+    qemu_args+=( -device "vfio-pci,host=0000:04:00.3,iommufd=iommufd0" )
+    cloud_args+=( --device "path=/sys/bus/pci/devices/0000:04:00.3" )
 }
 
-qemu_disk() {
-    qemu_args+=(
-        -drive "file=${vm_disk},if=virtio,format=qcow2,discard=unmap"
-    )
+add_vsock() {
+    qemu_args+=( -device "vhost-vsock-pci,guest-cid=${vm_vsock}" )
+    cloud_args+=( --vsock "cid=${vm_vsock},socket=/run/${vm_name}-vsock.sock" )
 }
 
-qemu_net() {
+add_disk() {
+    qemu_args+=( -drive "file=${vm_disk},if=virtio,format=qcow2,discard=unmap" )
+    cloud_args+=( --disk "path=${vm_disk},image_type=qcow2,backing_files=on,sparse=on" )
+}
+
+add_net() {
+    vm_socket="/run/${vm_name}-passt.sock" 
+
     rm -f "$vm_socket"
 
     ip netns exec "ns-${vm_name}" passt \
@@ -88,14 +97,21 @@ qemu_net() {
         --udp-ports ${vm_udp} &
 
     vm_wait_socket
+
     qemu_args+=(
         -chardev "socket,id=net0,path=${vm_socket}"
         -netdev "vhost-user,chardev=net0,id=net"
         -device "virtio-net-pci,netdev=net,mac=${vm_mac},romfile="
     )
+
+    cloud_args+=(
+        --net "vhost_user=true,socket=${vm_socket},vhost_mode=client,mac=${vm_mac},num_queues=2,queue_size=256"
+    )
 }
 
-qemu_share() {
+add_share() {
+    vm_socket="/run/${vm_name}-${vm_fs_id}.sock"
+
     rm -f "$vm_socket"
 
     if ((vm_ro)); then
@@ -110,9 +126,11 @@ qemu_share() {
         -chardev "socket,id=${vm_fs_id},path=${vm_socket}"
         -device "vhost-user-fs-pci,chardev=${vm_fs_id},tag=${vm_dst}"
     )
+
+    cloud_args+=( --fs "socket=${vm_socket},tag=${vm_dst},id=${vm_fs_id}" )
 }
 
-qemu_run() {
+run_qemu() {
     qemu-system-x86_64 \
         -nodefaults \
         -no-user-config \
@@ -129,60 +147,11 @@ qemu_run() {
         -serial stdio \
         -display none \
         -monitor none \
+        -object "iommufd,id=iommufd0" \
         "${qemu_args[@]}"
 }
 
-# cloud
-
-cloud_boot() {
-    cloud_args+=(
-        --disk "path=${vm_boot},image_type=raw,readonly=on"
-    )
-}
-
-cloud_gpu() {
-    cloud_args+=(
-        --device "path=/sys/bus/pci/devices/0000:41:00.0" "path=/sys/bus/pci/devices/0000:41:00.1"
-    )
-}
-
-cloud_usb() {
-    dev=0000:04:00.3
-
-    echo "$dev" > /sys/bus/pci/devices/$dev/driver/unbind
-    echo vfio-pci > /sys/bus/pci/devices/$dev/driver_override
-    echo "$dev" > /sys/bus/pci/drivers_probe
-
-    cloud_args+=(
-        --device "path=/sys/bus/pci/devices/0000:04:00.3"
-    )
-}
-
-cloud_vsock() {
-    cloud_args+=(
-        --vsock "cid=${vm_vsock},socket=/run/${vm_name}-vsock.sock"
-    )
-}
-
-cloud_disk() {
-    cloud_args+=(
-        --disk "path=${vm_disk},image_type=qcow2,backing_files=on,sparse=on"
-    )
-}
-
-cloud_net() {
-    cloud_args+=(
-        --net "vhost_user=true,socket=${vm_socket},vhost_mode=client,mac=${vm_mac},num_queues=2,queue_size=256"
-    )
-}
-
-cloud_share() {
-    cloud_args+=(
-        --fs "socket=${vm_socket},tag=${vm_dst},id=${vm_fs_id}"
-    )
-}
-
-cloud_run() {
+run_cloud() {
     cloud-hypervisor \
         --cpus "boot=${vm_cpu}" \
         --memory "size=${vm_ram}G,shared=on,hugepages=on,hugepage_size=1G" \
@@ -197,44 +166,35 @@ cloud_run() {
 
 run_vm1() {
     vm_name="vm1"
-    trap vm_cleanup EXIT INT TERM
+    
+    vm_init
+    add_gpu
+    add_usb
 
-    cloud_args=()
-    cloud_gpu
-    cloud_usb
-
-    vm_iso="/root/vm1.iso" cloud_iso
-    vm_disk="/hdd/private/rw-img/vm1.qcow2" cloud_disk
-
-    vm_ram="32" vm_cpu="32" cloud_run
-    vm_cleanup
+    vm_disk="/hdd/private/rw-img/vm1.qcow2" add_disk
+    vm_ram="32" vm_cpu="32" run_cloud    
 }
-
-# vms
 
 run_hermes() {
     vm_name="hermes"
-    trap vm_cleanup EXIT INT TERM
-
-    qemu_args=()
-    vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi" qemu_kernel
-
-    qemu_gpu
-    vm_vsock="3" qemu_vsock
-
-    vm_disk="/ssd/public/cache-img/hermes.qcow2" qemu_disk
-    vm_disk="/hdd/public/rw-img/hermes.qcow2" qemu_disk
-
     vm_ip="10.67.69.2"
     vm_mask="24"
     vm_gateway="10.67.69.1"
+    
+    vm_init
+    vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi" add_qemu_kernel
+
+    add_gpu
+    vm_vsock="3" add_vsock
+
+    vm_disk="/ssd/public/cache-img/hermes.qcow2" add_disk
+    vm_disk="/hdd/public/rw-img/hermes.qcow2" add_disk
 
     vm_conf="/hdd/root/keys/user2.conf" vm_setup_wireguard
-    vm_dns="8.8.8.8" vm_tcp="all" vm_udp="all" vm_mac="52:54:00:a9:f5:da" vm_socket="/run/${vm_name}-passt.sock" qemu_net
+    vm_dns="8.8.8.8" vm_tcp="all" vm_udp="all" vm_mac="52:54:00:a9:f5:da" add_net
 
-    vm_fs_id="fs-ssd-internet" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-ssd-internet.sock" qemu_share
-    vm_fs_id="fs-hdd-internet" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/ro/internet" vm_ro="1" vm_socket="/run/${vm_name}-hdd-internet.sock" qemu_share
+    vm_fs_id="fs-ssd" vm_src="/ssd/public/ro/internet" vm_dst="/ssd/public/ro/internet" vm_ro="1" add_share
+    vm_fs_id="fs-hdd" vm_src="/hdd/public/ro/internet" vm_dst="/hdd/public/ro/internet" vm_ro="1" add_share
     
-    vm_ram="256" vm_cpu="128" qemu_run
-    vm_cleanup
+    vm_ram="256" vm_cpu="128" run_qemu
 }
