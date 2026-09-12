@@ -170,12 +170,6 @@ cloud_disk() {
     )
 }
 
-cloud_iso() {
-    cloud_args+=(
-        --disk "path=${vm_iso},image_type=raw,readonly=on"
-    )
-}
-
 cloud_net() {
     cloud_args+=(
         --net "vhost_user=true,socket=${vm_socket},vhost_mode=client,mac=${vm_mac},num_queues=2,queue_size=256"
