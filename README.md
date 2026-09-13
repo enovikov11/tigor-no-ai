@@ -114,6 +114,14 @@ hf auth login
 model="primitive-ai/Qwen3.8-Flash-Next-NVFP4"
 hf download $model --local-dir "/data/$model"
 
+for g in /sys/kernel/iommu_groups/*; do
+    echo "IOMMU group ${g##*/}"
+    for d in "$g"/devices/*; do
+        lspci -nn -s "${d##*/}"
+    done
+    echo
+done
+
 ## TODO
 
 systemd-creds decrypt
