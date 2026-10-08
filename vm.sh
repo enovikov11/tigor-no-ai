@@ -56,14 +56,20 @@ add_gpu() {
 }
 
 add_usb() {
-    dev=0000:04:00.3
-
     echo "$dev" > /sys/bus/pci/devices/$dev/driver/unbind
     echo vfio-pci > /sys/bus/pci/devices/$dev/driver_override
     echo "$dev" > /sys/bus/pci/drivers_probe
 
-    qemu_args+=( -device "vfio-pci,host=0000:04:00.3,iommufd=iommufd0" )
-    cloud_args+=( --device "path=/sys/bus/pci/devices/0000:04:00.3" )
+    qemu_args+=( -device "vfio-pci,host=$dev,iommufd=iommufd0" )
+    cloud_args+=( --device "path=/sys/bus/pci/devices/$dev" )
+}
+
+add_front_usb() {
+  dev="0000:04:00.3" add_usb
+}
+
+add_back_usb() {
+    dev="0000:43:00.3" add_usb
 }
 
 add_vsock() {
@@ -173,7 +179,7 @@ run_vm1() {
     
     vm_init
     add_gpu
-    add_usb
+    add_front_usb
 
     vm_fs_id="fs-ssd-pub" vm_src="/ssd/public/ro/internet" vm_dst="ssd-pub" vm_ro="1" add_share
     vm_fs_id="fs-hdd-pub" vm_src="/hdd/public/ro/internet" vm_dst="hdd-pub" vm_ro="1" add_share
@@ -195,6 +201,7 @@ run_hermes() {
     vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi" add_qemu_kernel
 
     add_gpu
+    add_front_usb
     vm_vsock="3" add_vsock
 
     vm_disk="/ssd/public/cache-img/hermes.qcow2" add_disk
