@@ -2,8 +2,8 @@
   description = "Tigor no AI Monorepo";
 
   inputs = {
-    # 2026-09-09 https://github.com/NixOS/nixpkgs/commits/nixos-26.05/
-    nixpkgs.url = "github:NixOS/nixpkgs/6aefcda9401be8acc2b74244fb3b37520ea1f0a8";
+    # 2026-10-20 https://github.com/NixOS/nixpkgs/commits/nixos-26.05/
+    nixpkgs.url = "github:NixOS/nixpkgs/cd4ea8d57de16f4810bc5f14207bac45fbf19f67";
   };
 
   outputs =
