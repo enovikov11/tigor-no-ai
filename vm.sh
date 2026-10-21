@@ -198,7 +198,7 @@ run_hermes() {
     vm_gateway="10.67.69.1"
     
     vm_init
-    vm_kernel="/ssd/public/uki/vm-r114-nvda-pods-vsock-pub-BOOTX64.efi" add_qemu_kernel
+    vm_kernel="/ssd/public/uki/vm-r115-nvda-pods-vsock-pub-BOOTX64.efi" add_qemu_kernel
 
     add_gpu
     add_front_usb
